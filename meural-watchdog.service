@@ -6,6 +6,8 @@ After=network.target
 [Service]
 Type=simple
 User=guy
+Group=guy
+WorkingDirectory=/home/guy/meural-manager
 EnvironmentFile=/home/guy/meural-manager/.env
 ExecStart=/usr/bin/node /home/guy/meural-manager/meural-watchdog.js
 Restart=on-failure
