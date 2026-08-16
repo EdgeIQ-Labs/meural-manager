@@ -19,6 +19,9 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
+// Load environment variables from .env file
+try { require('dotenv').config(); } catch (e) { /* dotenv not installed, using process.env only */ }
+
 // ---------------------------------------------------------------------------
 // Configuration
 // ---------------------------------------------------------------------------
@@ -132,14 +135,25 @@ async function checkLocalStatus() {
   const baseUrl = `http://${CONFIG.FRAME_IP}`;
 
   try {
-    const [sleepCheck, backlight] = await Promise.all([
+    const [sleepCheck, backlight] = await Promise.allSettled([
       httpGet(`${baseUrl}/remote/control_check/sleep/`),
       httpGet(`${baseUrl}/remote/get_backlight/`),
     ]);
 
+    const sleepResult = sleepCheck.status === 'fulfilled' ? sleepCheck.value : null;
+    const backlightResult = backlight.status === 'fulfilled' ? backlight.value : null;
+
+    // Log any failures for debugging
+    if (sleepCheck.status === 'rejected') {
+      log(`Sleep check failed: ${sleepCheck.reason.message}`, 'WARN');
+    }
+    if (backlight.status === 'rejected') {
+      log(`Backlight check failed: ${backlight.reason.message}`, 'WARN');
+    }
+
     return {
-      sleeping: sleepCheck.response === true,
-      backlight: parseInt(backlight.response) || 0,
+      sleeping: sleepResult?.response === true,
+      backlight: parseInt(backlightResult?.response) || 0,
       available: true,
     };
   } catch (e) {
@@ -338,6 +352,8 @@ async function check() {
 
     // Send a postcard to ensure something displays
     await sendPostcard(path.join(CONFIG.CACHE_DIR, 'poster.jpg'));
+  } else {
+    log(`Frame OK - backlight: ${localStatus.backlight}`, 'INFO');
   }
 
   debug('Frame status:', localStatus);
