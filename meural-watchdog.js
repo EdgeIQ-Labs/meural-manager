@@ -43,6 +43,9 @@ const CONFIG = {
   // Optional: Local image directory for slideshow (bypasses cloud)
   LOCAL_SLIDESHOW_DIR: process.env.MEURAL_LOCAL_SLIDESHOW_DIR || null,
 
+  // Optional: Use single image instead of cycling (prevents flashing)
+  LOCAL_SLIDESHOW_SINGLE: process.env.MEURAL_LOCAL_SLIDESHOW_SINGLE === 'true',
+
   // Cache directory for downloaded images
   CACHE_DIR: process.env.MEURAL_CACHE_DIR || '/tmp/meural-watchdog/',
 
@@ -287,11 +290,20 @@ async function getLocalImage() {
       return null;
     }
 
-    // Cycle through images
-    const index = state.slideshowIndex % imageFiles.length;
-    state.slideshowIndex = (state.slideshowIndex + 1) % imageFiles.length;
+    // Cycle through images or use single image
+    let targetFile;
+    if (CONFIG.LOCAL_SLIDESHOW_SINGLE) {
+      // Use first image only (static display)
+      targetFile = imageFiles[0];
+      log(`Single image mode: ${targetFile}`, 'INFO');
+    } else {
+      // Cycle through all images
+      const index = state.slideshowIndex % imageFiles.length;
+      state.slideshowIndex = (state.slideshowIndex + 1) % imageFiles.length;
+      targetFile = imageFiles[index];
+    }
 
-    return path.join(CONFIG.LOCAL_SLIDESHOW_DIR, imageFiles[index]);
+    return path.join(CONFIG.LOCAL_SLIDESHOW_DIR, targetFile);
   } catch (e) {
     log(`Failed to read local directory: ${e.message}`, 'ERROR');
     return null;
