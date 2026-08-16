@@ -49,8 +49,8 @@ const CONFIG = {
   // Cache directory for downloaded images
   CACHE_DIR: process.env.MEURAL_CACHE_DIR || '/tmp/meural-watchdog/',
 
-  // Image post interval (seconds) — very frequent to prevent preview expiry
-  POST_INTERVAL: parseInt(process.env.POST_INTERVAL || '5'),
+  // Image post interval (seconds) — refresh well before preview expires
+  POST_INTERVAL: parseInt(process.env.POST_INTERVAL || '30'),
 
   // How often to check frame health (ms)
   CHECK_INTERVAL: parseInt(process.env.CHECK_INTERVAL || '60000'), // 1 minute
