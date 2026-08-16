@@ -18,6 +18,7 @@ const http = require('http');
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
+const { exec } = require('child_process');
 
 // Load environment variables from .env file
 try { require('dotenv').config(); } catch (e) { /* dotenv not installed, using process.env only */ }
@@ -38,6 +39,9 @@ const CONFIG = {
 
   // Optional: Gallery ID to cycle through
   GALLERY_ID: process.env.MEURAL_GALLERY_ID || null,
+
+  // Optional: Local image directory for slideshow (bypasses cloud)
+  LOCAL_SLIDESHOW_DIR: process.env.MEURAL_LOCAL_SLIDESHOW_DIR || null,
 
   // Cache directory for downloaded images
   CACHE_DIR: process.env.MEURAL_CACHE_DIR || '/tmp/meural-watchdog/',
@@ -182,47 +186,35 @@ async function wakeFrame() {
 async function sendPostcard(imagePath) {
   const postcardUrl = `http://${CONFIG.FRAME_IP}/remote/postcard/`;
 
-  try {
-    const FormData = require('formdata-node');
-    const file = require('fs').createReadStream(imagePath);
-    const form = new FormData();
-    form.append('photo', file, path.basename(imagePath));
+  return new Promise((resolve, reject) => {
+    const cmd = `curl -s -F "photo=@${imagePath}" "${postcardUrl}"`;
 
-    const urlObj = new URL(postcardUrl);
-    const options = {
-      hostname: urlObj.hostname,
-      port: urlObj.port || 80,
-      path: urlObj.pathname,
-      method: 'POST',
-      headers: form.getHeaders(),
-    };
+    exec(cmd, (error, stdout, stderr) => {
+      if (error) {
+        log(`Failed to send postcard: ${error.message}`, 'ERROR');
+        resolve(null);
+        return;
+      }
 
-    return new Promise((resolve, reject) => {
-      const req = http.request(options, (res) => {
-        let data = '';
-        res.on('data', chunk => data += chunk);
-        res.on('end', () => {
-          try {
-            const result = JSON.parse(data);
-            log(`Postcard sent successfully`, 'ACTION');
-            resolve(result);
-          } catch (e) {
-            log(`Postcard response parse error: ${e.message}`, 'ERROR');
-            resolve(null);
-          }
-        });
-      });
-      req.on('error', reject);
-      req.setTimeout(10000, () => {
-        req.destroy();
-        reject(new Error('Timeout'));
-      });
-      form.pipe(req);
+      if (stderr) {
+        log(`Postcard curl stderr: ${stderr}`, 'WARN');
+      }
+
+      try {
+        const result = JSON.parse(stdout);
+        if (result.status === 'pass') {
+          log(`Postcard sent successfully: ${path.basename(imagePath)}`, 'ACTION');
+          resolve(result);
+        } else {
+          log(`Postcard failed: ${result.response}`, 'ERROR');
+          resolve(null);
+        }
+      } catch (e) {
+        log(`Postcard response parse error: ${stdout}`, 'ERROR');
+        resolve(null);
+      }
     });
-  } catch (e) {
-    log(`Failed to send postcard: ${e.message}`, 'ERROR');
-    return null;
-  }
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -281,10 +273,40 @@ async function downloadImage(itemUrl, cachePath) {
   });
 }
 
+async function getLocalImage() {
+  if (!CONFIG.LOCAL_SLIDESHOW_DIR) {
+    return null;
+  }
+
+  try {
+    const files = fs.readdirSync(CONFIG.LOCAL_SLIDESHOW_DIR);
+    const imageFiles = files.filter(f => /\.(jpe?g|png|gif)$/i.test(f));
+
+    if (imageFiles.length === 0) {
+      log(`No images found in ${CONFIG.LOCAL_SLIDESHOW_DIR}`, 'WARN');
+      return null;
+    }
+
+    // Cycle through images
+    const index = state.slideshowIndex % imageFiles.length;
+    state.slideshowIndex = (state.slideshowIndex + 1) % imageFiles.length;
+
+    return path.join(CONFIG.LOCAL_SLIDESHOW_DIR, imageFiles[index]);
+  } catch (e) {
+    log(`Failed to read local directory: ${e.message}`, 'ERROR');
+    return null;
+  }
+}
+
 async function getNextImage() {
   ensureCacheDir();
 
-  // Refresh gallery periodically
+  // Use local slideshow if configured
+  if (CONFIG.LOCAL_SLIDESHOW_DIR) {
+    return getLocalImage();
+  }
+
+  // Fall back to cloud gallery
   const now = Date.now();
   if (now - state.lastRefreshTime > 5 * 60 * 1000) { // 5 minutes
     state.galleryItems = await fetchGalleryItems();
@@ -384,8 +406,20 @@ async function main() {
     }
   }, CONFIG.CHECK_INTERVAL);
 
-  // Schedule slideshow (only if gallery ID configured)
-  if (CONFIG.GALLERY_ID && CONFIG.SERVER_URL) {
+  // Schedule slideshow (local or cloud)
+  let slideshowEnabled = false;
+
+  if (CONFIG.LOCAL_SLIDESHOW_DIR) {
+    slideshowEnabled = true;
+    log(`Local slideshow enabled: ${CONFIG.LOCAL_SLIDESHOW_DIR}`, 'INFO');
+  } else if (CONFIG.GALLERY_ID && CONFIG.SERVER_URL) {
+    slideshowEnabled = true;
+    log(`Cloud slideshow enabled: Gallery ${CONFIG.GALLERY_ID}`, 'INFO');
+  } else {
+    log('Slideshow disabled - set MEURAL_LOCAL_SLIDESHOW_DIR or both MEURAL_SERVER_URL and MEURAL_GALLERY_ID to enable', 'INFO');
+  }
+
+  if (slideshowEnabled) {
     const slideshowInterval = setInterval(async () => {
       try {
         await runSlideshow();
@@ -396,8 +430,6 @@ async function main() {
 
     // Run once immediately
     await runSlideshow();
-  } else {
-    log('Slideshow disabled - set MEURAL_SERVER_URL and MEURAL_GALLERY_ID to enable', 'INFO');
   }
 
   // Handle graceful shutdown
