@@ -41,7 +41,7 @@ const CONFIG = {
   GALLERY_ID: process.env.MEURAL_GALLERY_ID || null,
 
   // Optional: Local image directory for slideshow (bypasses cloud)
-  LOCAL_SLIDESHOW_DIR: process.env.MEURAL_LOCAL_SLIDESHOW_DIR || null,
+  LOCAL_SLIDESHOW_DIR: null, // DISABLED - causing issues
 
   // Optional: Use single image instead of cycling (prevents flashing)
   LOCAL_SLIDESHOW_SINGLE: process.env.MEURAL_LOCAL_SLIDESHOW_SINGLE === 'true',
