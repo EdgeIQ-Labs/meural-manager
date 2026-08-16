@@ -1,0 +1,22 @@
+[Unit]
+Description=Meural Watchdog - Keep Meural Canvas frames alive
+Documentation=https://github.com/davemorin/meural-manager
+After=network.target
+
+[Service]
+Type=simple
+User=guy
+EnvironmentFile=/home/guy/meural-manager/.env
+ExecStart=/usr/bin/node /home/guy/meural-manager/meural-watchdog.js
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=meural-watchdog
+
+# Security hardening
+NoNewPrivileges=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

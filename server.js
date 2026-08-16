@@ -160,8 +160,12 @@ let authToken = null;
 let tokenExpiry = null;
 
 // Auth helper using AWS Cognito (new Meural auth method)
-async function getToken() {
-  if (authToken && tokenExpiry && Date.now() < tokenExpiry) {
+let refreshInterval = null;
+
+async function getToken(forceRefresh = false) {
+  const now = Date.now();
+  // Refresh 5 minutes (300000 ms) before expiry
+  if (!forceRefresh && authToken && tokenExpiry && now < tokenExpiry - 300000) {
     return authToken;
   }
   
@@ -202,8 +206,26 @@ async function getToken() {
   return authToken;
 }
 
+// Proactive token refresh — runs every 5 minutes, refreshes if within 10 min of expiry
+function startTokenRefresher() {
+  if (refreshInterval) clearInterval(refreshInterval);
+  refreshInterval = setInterval(async () => {
+    try {
+      await getToken(true); // force refresh
+      console.log('[Meural] Token refreshed proactively');
+    } catch (err) {
+      console.error('[Meural] Proactive token refresh failed:', err.message);
+    }
+  }, 5 * 60 * 1000); // every 5 minutes
+}
+
+// Stop the refresher (for graceful shutdown)
+function stopTokenRefresher() {
+  if (refreshInterval) clearInterval(refreshInterval);
+}
+
 // Meural API proxy
-async function meuralRequest(method, path, body = null) {
+async function meuralRequest(method, path, body = null, retryCount = 0) {
   const token = await getToken();
   const opts = {
     method,
@@ -215,8 +237,23 @@ async function meuralRequest(method, path, body = null) {
   if (body) opts.body = JSON.stringify(body);
   
   const res = await fetch(`${MEURAL_API}${path}`, opts);
+  
+  // If 401, token might be invalid — force refresh and retry once
+  if (res.status === 401 && retryCount === 0) {
+    console.log('[Meural] Got 401, forcing token refresh and retrying...');
+    await getToken(true);
+    return meuralRequest(method, path, body, 1);
+  }
+  
   return res.json();
 }
+
+// Start token refresher on server start
+startTokenRefresher();
+
+// Graceful shutdown
+process.on('SIGTERM', () => { stopTokenRefresher(); process.exit(0); });
+process.on('SIGINT', () => { stopTokenRefresher(); process.exit(0); });
 
 // === API Routes ===
 

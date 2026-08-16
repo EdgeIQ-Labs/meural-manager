@@ -1,124 +1,173 @@
-# Meural Manager 🖼️
+# Meural Watchdog 🖼️
 
-A self-hosted web interface for managing your [Meural](https://www.netgear.com/home/digital-art-canvas/meural-canvas/) digital art frames. Finally—bulk operations, playlist management, and EXIF tracking that the official app doesn't provide.
+Keep your Meural Canvas digital frame alive — no cloud required.
 
-![License](https://img.shields.io/badge/license-MIT-blue.svg)
+When Meural's cloud servers have issues (or Netgear steps back like they did), your frame goes blank. This watchdog monitors your frame via its **local API** and automatically recovers when problems are detected.
 
-## Why I Built This
+## What It Does
 
-I have four Meural frames around my house displaying family photos. The official app is... fine for casual use, but I kept hitting walls:
+1. **Monitors frame health** every minute via local API
+2. **Wakes sleeping frames** automatically
+3. **Sends postcards** to force display when needed
+4. **Optional slideshow** — cycles through your gallery images (requires local server)
 
-- **No bulk delete.** When you're at 650/700 photos and need to make room, deleting one at a time is painful.
-- **No easy playlist management.** I wanted seasonal rotations, room-specific collections, curated sets.
-- **No EXIF visibility.** These are my photos—I want to know what camera, lens, and settings captured each memory.
+## Why This Exists
 
-So I built this over a weekend. It runs on a Mac mini on my local network, and now managing my Meural library takes minutes instead of hours.
+Netgear is stepping back from Meural. The official app hasn't been updated in over a year, and the Nimbus Bridge (the paid alternative) costs $69+ just to start.
 
-## Features
+Your Meural frame has a local HTTP API that the official app uses internally. We can talk to it directly and keep it alive without any cloud dependency.
 
-### 📷 Photo Management
-- Grid view of your entire library with sorting and filtering
-- **Bulk select and delete** — finally
-- Filter by orientation (portrait/landscape), year, camera
-- Add photos directly from browser with drag & drop upload
-- EXIF extraction on upload (camera, lens, GPS, settings)
-- Reverse geocoding for location tagging
-
-### 📋 Playlist Management  
-- Create, edit, and delete playlists
-- Add/remove photos from playlists
-- View playlist contents in a clean grid
-
-### 🖼️ Frame Control
-- See all your frames and their online status
-- Assign playlists to specific frames
-- Quick switching between collections
-
-### 📊 EXIF Library
-- Track camera gear usage across your collection
-- Filter photos by camera, lens, year, GPS, aperture range
-- See which lenses you actually use
-- Location data extraction and display
-
-## Quick Start
+## Installation
 
 ```bash
-# Clone the repo
+# Clone or download this repo
 git clone https://github.com/davemorin/meural-manager.git
 cd meural-manager
 
 # Install dependencies
 npm install
 
-# Set up your credentials
+# Configure
 cp .env.example .env
-# Edit .env with your Meural account email
-# Create .meural-password with your password (handles special characters)
+# Edit .env and set MEURAL_FRAME_IP to your frame's IP
+```
 
-# Run it
+### Find Your Frame's IP
+
+Check your router's connected devices list, or scan your network:
+
+```bash
+nmap -sn 192.168.1.0/24  # adjust for your subnet
+```
+
+Look for a device with hostname containing "meural".
+
+## Usage
+
+### Quick Start (Watchdog Only)
+
+```bash
 npm start
 ```
 
-Open `http://localhost:3333` — or access it from any device on your network.
+The watchdog will:
+- Poll your frame every minute
+- Wake it if sleeping
+- Log everything to `/tmp/meural-watchdog/watchdog.log`
+
+### With Slideshow (Optional)
+
+If you're running a local Meural server (like meural-manager), enable the slideshow:
+
+```bash
+export MEURAL_SERVER_URL=http://localhost:3333
+export MEURAL_GALLERY_ID=your-gallery-id
+npm start
+```
+
+### As a Systemd Service
+
+For auto-start on boot:
+
+```bash
+sudo cp meural-watchdog.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable meural-watchdog
+sudo systemctl start meural-watchdog
+```
+
+Check status:
+
+```bash
+sudo systemctl status meural-watchdog
+journalctl -u meural-watchdog -f
+```
+
+### Debug Mode
+
+```bash
+DEBUG=true npm run dev
+```
 
 ## Configuration
 
-Create a `.env` file:
+All settings via environment variables (see `.env.example`):
 
-```env
-MEURAL_USERNAME=your@email.com
-PORT=3333
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MEURAL_FRAME_IP` | `10.5.10.97` | IP of your Meural frame |
+| `MEURAL_SERVER_URL` | — | Local server URL (for slideshow) |
+| `MEURAL_GALLERY_ID` | — | Gallery to cycle through |
+| `MEURAL_CACHE_DIR` | `/tmp/meural-watchdog/` | Image cache location |
+| `CHECK_INTERVAL` | `60000` | Health check interval (ms) |
+| `POST_INTERVAL` | `30` | Slideshow image interval (seconds) |
+| `DEBUG` | `false` | Enable verbose logging |
+
+## How It Works
+
+The Meural Canvas exposes a local HTTP API at `http://<frame-ip>/`:
+
+- `/remote/control_check/sleep/` — Is the frame sleeping?
+- `/remote/control_command/resume/` — Wake it up
+- `/remote/postcard/` — Send an image directly
+- `/remote/get_backlight/` — Get current brightness
+
+The watchdog uses these endpoints to monitor and recover the frame without touching Meural's cloud infrastructure.
+
+## Local API Reference
+
+The Meural frame's local API accepts HTTP GET/POST requests:
+
+```
+GET  http://<ip>/remote/control_check/sleep/
+POST http://<ip>/remote/control_command/resume/
+POST http://<ip>/remote/postcard/       (multipart form with photo)
+GET  http://<ip>/remote/get_backlight/
 ```
 
-And a `.meural-password` file with just your password (this handles passwords with special characters like `#`):
+These endpoints work without authentication — the frame trusts local network requests.
 
-```
-yourpassword
-```
+## Testing
 
-## Tech Stack
-
-- **Backend:** Express.js wrapping the Meural REST API + AWS Cognito auth
-- **Frontend:** Vanilla HTML/CSS/JS (no build step, no framework bloat)
-- **Database:** SQLite for EXIF metadata storage
-- **APIs:** Nominatim (OpenStreetMap) for reverse geocoding
-
-## API Notes
-
-This wraps Meural's private API, which uses AWS Cognito for authentication. The API isn't officially documented, but it's been stable. Key endpoints:
-
-- `GET /user` — account info and storage limits
-- `GET /user/items` — your photo library
-- `GET /user/galleries` — your playlists
-- `GET /user/devices` — your frames
-- `POST /items` — upload photos
-- `DELETE /items/:id` — delete photos
-
-## Running as a Service (macOS)
-
-If you want this running 24/7 on a Mac mini or similar:
+Before running the full watchdog, test connectivity:
 
 ```bash
-# Using pm2
-npm install -g pm2
-pm2 start server.js --name meural-manager
-pm2 save
-pm2 startup
+# Check if frame is reachable
+curl http://10.5.10.97/
+
+# Check sleep state
+curl http://10.5.10.97/remote/control_check/sleep/
+
+# Wake the frame
+curl -X POST http://10.5.10.97/remote/control_command/resume/
 ```
 
-## Known Limitations
+## Troubleshooting
 
-- The Meural API occasionally rate limits; bulk operations include small delays
-- No official API documentation means things could break if Netgear changes their backend
+### Frame not responding
+- Verify the frame is on the same network
+- Check firewall rules (frame uses port 80)
+- Try pinging the frame IP
 
-## Contributing
+### Blank screen persists
+- The watchdog sends a postcard after waking — give it 30 seconds
+- Check logs: `tail -f /tmp/meural-watchdog/watchdog.log`
+- Enable debug mode for more detail
 
-Issues and PRs welcome. This scratches my itch, but happy to make it better for others.
+### Slideshow not working
+- Ensure `MEURAL_SERVER_URL` and `MEURAL_GALLERY_ID` are set
+- Verify the local server is running and accessible
+- Check that gallery items have valid download URLs
 
 ## License
 
 MIT — do whatever you want with it.
 
+## Related
+
+- [Meural Manager](https://github.com/davemorin/meural-manager) — Web UI for managing photos and playlists
+- [Nimbus Bridge](https://nimbusdigitalart.com/meural/) — Commercial alternative ($69+)
+
 ---
 
-Built with ☕ and mild frustration at the official Meural app.
+*Built because Netgear abandoned Meural and I have four frames full of family photos.*

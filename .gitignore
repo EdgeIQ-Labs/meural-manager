@@ -1,5 +1,9 @@
 node_modules/
 .env
-.meural-password
+*.log
+/tmp/
 *.sqlite
 .DS_Store
+.vscode/
+.idea/
+meural-watchdog.pid

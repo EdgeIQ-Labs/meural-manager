@@ -635,12 +635,30 @@ let selectedPhotos = new Set();
 let activePlaylist = null;
 
 // API helpers
-async function api(path, opts = {}) {
-  const res = await fetch('/api' + path, {
-    ...opts,
-    headers: { 'Content-Type': 'application/json', ...opts.headers }
-  });
-  return res.json();
+async function api(path, opts = {}, retries = 3, delay = 1000) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const res = await fetch('/api' + path, {
+        ...opts,
+        headers: { 'Content-Type': 'application/json', ...opts.headers }
+      });
+      
+      if (!res.ok) {
+        // Don't retry on 4xx errors (except 429)
+        if (res.status >= 400 && res.status < 500 && res.status !== 429) {
+          throw new Error(`HTTP ${res.status}`);
+        }
+        throw new Error(`HTTP ${res.status}`);
+      }
+      
+      return res.json();
+    } catch (err) {
+      if (attempt === retries) throw err;
+      console.warn(`API call failed (attempt ${attempt + 1}/${retries + 1}), retrying in ${delay}ms:`, err.message);
+      await new Promise(r => setTimeout(r, delay));
+      delay *= 2; // exponential backoff
+    }
+  }
 }
 
 // Load user info (storage)

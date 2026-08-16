@@ -1,0 +1,23 @@
+#!/usr/bin/env node
+"use strict";
+
+/**
+ * meural-watchdog - Keep your Meural Canvas alive
+ *
+ * Usage:
+ *   meural-watchdog [--config /path/to/.env]
+ *
+ * Environment variables (or .env file):
+ *   MEURAL_FRAME_IP        - IP address of your Meural frame (default: 10.5.10.97)
+ *   MEURAL_SERVER_URL      - Local server URL for gallery API (e.g., http://localhost:3333)
+ *   MEURAL_GALLERY_ID      - Gallery ID to cycle through
+ *   MEURAL_DEVICE_ID       - Device ID for server API calls
+ *   MEURAL_CACHE_DIR       - Directory to cache downloaded images (default: /tmp/meural-watchdog/)
+ *   MEURAL_LOG_FILE        - Path to log file (default: /tmp/meural-watchdog/watchdog.log)
+ *   CHECK_INTERVAL         - Health check interval in ms (default: 60000)
+ *   POST_INTERVAL          - Seconds between slideshow images (default: 30)
+ *   STALE_THRESHOLD        - ms before considering frame stale (default: 120000)
+ *   DEBUG                  - Set to "true" for verbose logging
+ */
+
+require('./meural-watchdog');

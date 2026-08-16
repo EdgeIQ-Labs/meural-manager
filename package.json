@@ -1,29 +1,36 @@
 {
-  "name": "meural-manager",
+  "name": "meural-watchdog",
   "version": "1.0.0",
-  "description": "Simple web interface to manage Meural frames",
-  "main": "server.js",
+  "description": "Keep your Meural Canvas alive by monitoring and recovering from blank slides",
+  "main": "meural-watchdog.js",
+  "bin": {
+    "meural-watchdog": "./bin/meural-watchdog"
+  },
   "scripts": {
-    "start": "node server.js",
-    "dev": "node --watch server.js"
+    "start": "node meural-watchdog.js",
+    "dev": "DEBUG=true node meural-watchdog.js"
   },
   "keywords": [
     "meural",
-    "art",
-    "frame"
+    "canvas",
+    "digital-frame",
+    "watchdog",
+    "netgear"
   ],
-  "author": "",
+  "author": "Cypher <https://github.com/davemorin>",
   "license": "MIT",
+  "engines": {
+    "node": ">=16.0.0"
+  },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.71.2",
-    "@aws-sdk/client-cognito-identity-provider": "^3.967.0",
-    "better-sqlite3": "^12.6.0",
-    "cors": "^2.8.5",
-    "dotenv": "^16.5.0",
-    "exifreader": "^4.36.0",
-    "express": "^5.1.0",
-    "formdata-node": "^6.0.3",
-    "multer": "^1.4.5-lts.1",
-    "sharp": "^0.34.5"
-  }
+    "formdata-node": "^6.0.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/davemorin/meural-manager.git"
+  },
+  "bugs": {
+    "url": "https://github.com/davemorin/meural-manager/issues"
+  },
+  "homepage": "https://github.com/davemorin/meural-manager#readme"
 }
